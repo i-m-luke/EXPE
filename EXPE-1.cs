@@ -37,8 +37,11 @@ public partial class TestExplorerControl : IUIStateTrackable
             .Instance.ExitState.TestExplorerComboBoxItemIndex;
         this.ExplorationTreeView.TreeViewNodeStates = AppStateManager
             .Instance.ExitState.TestExplorerTreeViewNodeStates;
-
-        // TODO: Click to treeviewitem button to setup editor
+        this.ExplorationTreeView
+                .GetChild(AppStateManager
+            .Instance.ExitState.TestExplorerTreeViewIndexedPath)?
+                .Button
+                .PerformClick(); 
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -58,7 +61,7 @@ public partial class TestExplorerControl : IUIStateTrackable
                     StateKeys.DeriveCurrentKey(TestModuleComboBoxStateKey),
                     new ComboBoxState(selectedIndex, ExitStateKey));
 
-                //// TODO: Event handler pro button click získá state s tímto klíčem a na základě něho sestaví klíč prp získání stavu NodeStates
+                //// TODO: Event handler pro button click získá state s tímto klíčem a na základě něho sestaví klíč pro získání stavu NodeStates
             };
 
         AppStateManager.Instance.StateChanged += (key, state) =>
@@ -96,7 +99,7 @@ public partial class TestExplorerControl : IUIStateTrackable
                 var indexedPath = treeViewItem.GetIndexedPath(); // TODO: Or take the indexedPath fron AppStateManager.Instance.ExitState.TestExplorer.ExplorationTreeViewIndexedPath;
                 AppStateManager.Instance.ExitState.TestExplorerTreeViewNodeStates = new TreeViewNodeStates(indexedPath);
                 // TODO: We have to set state for indexedPath for selectedItemIndex using MakeExplorationTreeViewItemStateKey
-                configEditor.UpdateState(); // TODO: UpdateState will set NodeStates to property tree view
+                configEditor.UpdateState(); // TODO: UpdateState will set NodeStates to property tree view ... Or tigger state update by StateChanged event?
             }
 
             var selectedIndex = this.TestModuleComboBox.SelectedIndex;
