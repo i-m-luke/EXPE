@@ -33,13 +33,11 @@ public partial class TestExplorerControl : IUIStateTrackable
     /// <inheritdoc />
     public void InitState()
     {
-        this.TestModuleComboBox.SelectedIndex = AppStateManager
-            .Instance.ExitState.TestExplorerComboBoxItemIndex;
-        this.ExplorationTreeView.TreeViewNodeStates = AppStateManager
-            .Instance.ExitState.TestExplorerTreeViewNodeStates;
+        var currentState = AppStateManager.Instance.ExitState;
+        this.TestModuleComboBox.SelectedIndex = currentState.TestExplorerComboBoxItemIndex;
+        this.ExplorationTreeView.TreeViewNodeStates = currentState.TestExplorerTreeViewNodeStates;
         this.ExplorationTreeView
-                .GetChild(AppStateManager
-            .Instance.ExitState.TestExplorerTreeViewIndexedPath)?
+                .GetChild(currentState.TestExplorerTreeViewIndexedPath)?
                 .Button
                 .PerformClick(); 
     }
