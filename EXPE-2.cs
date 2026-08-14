@@ -1,44 +1,27 @@
-private readonly Event<Action<string>> changed = new();
+// MODEL:
 
-public event Action<string> Changed
-{
-    add { 
-        changed.Add(value); }
-    remove { 
-        changed.Remove(value);}
-}
+TestAssemblyEntity(
+    TestType TestType,
+    string Name,
+    string Path)
 
-public void DoSome()
-{
-    changed.Notify("A")
-}
-
-public void Dispose()
-{
-    changedEvent.Dispose();
-}
-
-public Event<Action<T>> : IDisposable
-    where T : delegate
-{
-    List<T> handler = [];
-
-    public void Add(Action<T> handler)
-        => this.handlers.Add
-        (handler); //lock 
-        
-    public void Notify(T arg1)
-    {
-        // TODO : Lock 
-        foreach (var handler in handlers)
-        {
-            handler();
-        }
-    }
+TestAssembly(
+    TestSuite[] RuntimeTests,
+    TestSuite[] ApplicationTests)
     
-    public void Release()
-        => this.handlers.Clear();
-        
-    public void Dispose()
-        => this.Release();
-}
+TestSuite(
+    TestCase[] TestCases,
+    ...,
+    string Path) 
+    : TestAssemblyEntity(.., Path)
+    
+TestCase(...)
+    : TestAssemblyEntity(...)
+
+// API & LOGIC
+INunitTestRunnerProxy
+    RunTestAsync: 
+    - Bude brát TestAssemblyEntity[]
+    - Potřebuje znát pouze Path (podle toho se entita spustí )
+    - Nepotřebuje Children (vše dostane na hromadě, jak testcasy tak testsuites)
+    LoadAssemblyAsync: Navrátí TestAssemblyEntity
