@@ -1,53 +1,69 @@
-﻿﻿namespace Zat.SystemTest.Common.Net.MVVM.ViewModel.UserConfig;
+﻿
 
-using CommunityToolkit.Mvvm.DependencyInjection;
+/// <inheritdoc />
+    protected override void Initialize()
+    {
+        SystemTest.Common.DevLogger.Instance.LogInfo($"{LogPrefix}: Initializing ...");
 
-using Zat.SystemTest.Common.Net.MVVM.ViewModel;
+        base.Initialize();
+        this.RegisterIndependentView(true);
 
-/// <summary>
-/// Represents a test user config data container.
-/// </summary>
-/// <param name="model">The model.</param>
-/// <param name="ioc">Shared IoC.</param>
-public class TestUserConfig(
-    Model.UserConfig.TestUserConfig model,
-    Ioc ioc)
-    : ValidatableViewModelBase<Model.UserConfig.TestUserConfig>(model)
-{
-    /// <summary>
-    /// Gets the ID of the test the user config is associated with.
-    /// </summary>
-    public Guid TestId
-        => this.Model.TestId;
+        ThreadHelper.ThrowIfNotOnUIThread();
 
-    /// <summary>
-    /// Gets the test user config object.
-    /// </summary>
-    [field: AllowNull]
-    public TestConfigObject ConfigObject
-        => this.GetOrInitialize(ref field, () => 
+        this.ProjectActions = new ProjectActions(this.ProjectInfoProvider);
+
+        var mainAssemblyPath = Path.Combine(
+            this.ProjectInfoProvider.OutputDirPath,
+            this.ProjectInfoProvider.OutputFileName);
+        if (!File.Exists(mainAssemblyPath))
         {
-            var userConfigEditorService = new UserConfigEditorService();
-            var editorsServices = new EditorsServices
-                userConfigEditorServices: userConfigEditorService,
-                packageManifestEditorServices: null);
-                
-            // TODO: Extend ioc with EditorsServices
-            var configObject = new TestConfigObject(this.Model.ConfigObject, ioc));
-            
-            // TODO: Instantiate the configObject and provided it to the userConfigEditorService
-            
-            return configObject;
+            var dte = this.GetDte();
+            if (dte is not null)
+            {
+                this.messageBoxService.ShowInfo(Resources.MainAssemblyNotFoundInfoMessage);
+                dte.Solution.SolutionBuild.BuildProject(
+                    dte.Solution.SolutionBuild.ActiveConfiguration.Name,
+                    this.ProjectInfoProvider.UniqueName,
+                    WaitForBuildToFinish: true);
+            }
         }
-}
 
-...
+        var editorsRemoting = this.GetRequiredService<IEditorsRemoting>();
+        if (!editorsRemoting.ColorsThemeInitialized)
+        {
+            this.GetColorsTheme().Visit(editorsRemoting.InitializeColorsTheme);
+        }
 
-public class UserConfigEditorService(Lazy<object> configInstanceLazy) : IUserConfigEditorService
-{
-    public object GetConfigObject()
-        => configInstanceLazy.Value;
+        // Init test buffer manager
+        this.TextBufferManager = new TextBufferManager(
+            textBufferLines,
+            (IComponentModel)this.GetRequiredService<SComponentModel>());
+        this.TextBufferManager.UndoRedoHappened += this.OnUndoRedoHappened;
+        this.currentValidTextBufferSnapshot = this.TextBufferManager.GetCurrentSnapshot();
         
-    public object[] GetDriverConfigs()
-        => [];
-}
+        // Init remote editor
+        var remoteEditorResult = this.GetRemoteEditor(this.editorFactory); 
+        if (remoteEditorResult.RemoteEditor is null)
+        {
+            // Show error dialog with remoteEditorResult.Error;
+            this.WindowFrame.CloseFrame((uint)__FRAMECLOSE.FRAMECLOSE_PromptSave);
+            return;
+        }
+        
+        this.RemoteEditor = remoteEditorResult.RemoteEditor;
+        try
+        {
+            this.RemoteEditor.Initialize(
+                new RemoteEditorVisitor(new WeakReference<IRemoteEditorVisitor>(this)),
+                this.TextBufferManager.BufferText);
+        }
+        catch (Exception ex)
+        {
+            this.messageBoxService.ShowError(ex.Message, Resources.UnhandledException_Dialog_Title);
+        }
+
+        this.InitWindowFrame();
+        this.InitDteEvents();
+
+        SystemTest.Common.DevLogger.Instance.LogInfo($"{LogPrefix}: Initialized");
+    }
