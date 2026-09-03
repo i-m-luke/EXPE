@@ -1,77 +1,101 @@
 ﻿
 
 /// <inheritdoc />
-    protected override void Initialize()
+protected override void Initialize()
+{
+    SystemTest.Common.DevLogger.Instance.LogInfo($"{LogPrefix}: Initializing ...");
+
+    base.Initialize();
+    this.RegisterIndependentView(true);
+
+    ThreadHelper.ThrowIfNotOnUIThread();
+
+    this.ProjectActions = new ProjectActions(this.ProjectInfoProvider);
+
+    var mainAssemblyPath = Path.Combine(
+        this.ProjectInfoProvider.OutputDirPath,
+        this.ProjectInfoProvider.OutputFileName);
+    if (!File.Exists(mainAssemblyPath))
     {
-        SystemTest.Common.DevLogger.Instance.LogInfo($"{LogPrefix}: Initializing ...");
-
-        base.Initialize();
-        this.RegisterIndependentView(true);
-
-        ThreadHelper.ThrowIfNotOnUIThread();
-
-        this.ProjectActions = new ProjectActions(this.ProjectInfoProvider);
-
-        var mainAssemblyPath = Path.Combine(
-            this.ProjectInfoProvider.OutputDirPath,
-            this.ProjectInfoProvider.OutputFileName);
-        if (!File.Exists(mainAssemblyPath))
+        var dte = this.GetDte();
+        if (dte is not null)
         {
-            var dte = this.GetDte();
-            if (dte is not null)
-            {
-                this.messageBoxService.ShowInfo(Resources.MainAssemblyNotFoundInfoMessage);
-                dte.Solution.SolutionBuild.BuildProject(
-                    dte.Solution.SolutionBuild.ActiveConfiguration.Name,
-                    this.ProjectInfoProvider.UniqueName,
-                    WaitForBuildToFinish: true);
-            }
+            this.messageBoxService.ShowInfo(Resources.MainAssemblyNotFoundInfoMessage);
+            dte.Solution.SolutionBuild.BuildProject(
+                dte.Solution.SolutionBuild.ActiveConfiguration.Name,
+                this.ProjectInfoProvider.UniqueName,
+                WaitForBuildToFinish: true);
         }
-
-        var editorsRemoting = this.GetRequiredService<IEditorsRemoting>();
-        if (!editorsRemoting.ColorsThemeInitialized)
-        {
-            this.GetColorsTheme().Visit(editorsRemoting.InitializeColorsTheme);
-        }
-
-        // Init test buffer manager
-        this.TextBufferManager = new TextBufferManager(
-            textBufferLines,
-            (IComponentModel)this.GetRequiredService<SComponentModel>());
-        this.TextBufferManager.UndoRedoHappened += this.OnUndoRedoHappened;
-        this.currentValidTextBufferSnapshot = this.TextBufferManager.GetCurrentSnapshot();
-        
-        // Init remote editor
-        var remoteEditorResult = this.GetRemoteEditor(this.editorFactory); 
-        if (remoteEditorResult.Editor is null)
-        {
-            if (remoteEditorResult.Error is not null)
-            {
-                // Show error dialog with remoteEditorResult.Error;
-            }
-           
-            // TATO ŘÁDKA SE MOŽNÁ BUDE MUSET PŘESUNOUT DOLŮ POD InitWindowFrame a podmínit 'if remote EditorResult.Editor is null'
-            this.WindowFrame.CloseFrame((uint)__FRAMECLOSE.FRAMECLOSE_PromptSave); 
-            return;
-        }
-        else
-        {
-            this.RemoteEditor = remoteEditorResult.Editor;
-            try
-            {
-                this.RemoteEditor.Initialize(
-                    new RemoteEditorVisitor(new WeakReference<IRemoteEditorVisitor>(this)),
-                this.TextBufferManager.BufferText);
-            }
-            catch (Exception ex)
-            {
-                this.messageBoxService.ShowError(
-                    ex.Message, Resources.UnhandledException_Dialog_Title);
-                // ??? KDYŽ INICIALIZACE SELŽE TAK SE TIŠE POTLAČÍ?! TAKOVÝ EDITOR BY SE MĚL UZAVŘÍT!
-        }
-
-        this.InitWindowFrame();
-        this.InitDteEvents();
-
-        SystemTest.Common.DevLogger.Instance.LogInfo($"{LogPrefix}: Initialized");
     }
+
+    var editorsRemoting = this.GetRequiredService<IEditorsRemoting>();
+    if (!editorsRemoting.ColorsThemeInitialized)
+    {
+        this.GetColorsTheme().Visit(editorsRemoting.InitializeColorsTheme);
+    }
+
+    // Init test buffer manager
+    this.TextBufferManager = new TextBufferManager(
+        textBufferLines,
+        (IComponentModel)this.GetRequiredService<SComponentModel>());
+    this.TextBufferManager.UndoRedoHappened += this.OnUndoRedoHappened;
+    this.currentValidTextBufferSnapshot = this.TextBufferManager.GetCurrentSnapshot();
+    
+    // Init remote editor
+    var remoteEditorResult = this.GetRemoteEditor(this.editorFactory); 
+    if (remoteEditorResult.Editor is null)
+    {
+        if (remoteEditorResult.Error is not null)
+        {
+            // Show error dialog with remoteEditorResult.Error;
+        }
+       
+        // TATO ŘÁDKA SE MOŽNÁ BUDE MUSET PŘESUNOUT DOLŮ POD InitWindowFrame a podmínit 'if remote EditorResult.Editor is null'
+        this.WindowFrame.CloseFrame((uint)__FRAMECLOSE.FRAMECLOSE_PromptSave); 
+        return;
+    }
+    else
+    {
+        this.RemoteEditor = remoteEditorResult.Editor;
+        try
+        {
+            this.RemoteEditor.Initialize(
+                new RemoteEditorVisitor(new WeakReference<IRemoteEditorVisitor>(this)),
+            this.TextBufferManager.BufferText);
+        }
+        catch (Exception ex)
+        {
+            this.messageBoxService.ShowError(
+                ex.Message, Resources.UnhandledException_Dialog_Title);
+            // ??? KDYŽ INICIALIZACE SELŽE TAK SE TIŠE POTLAČÍ?! TAKOVÝ EDITOR BY SE MĚL UZAVŘÍT!
+    }
+
+    this.InitWindowFrame();
+    this.InitDteEvents();
+
+    SystemTest.Common.DevLogger.Instance.LogInfo($"{LogPrefix}: Initialized");
+}
+
+...
+
+/// <summary>
+/// Describes a remote editor result COM object.
+/// </summary>
+[Guid("a4554ae8-defa-403f-8d74-3ef0ca9afa85")]
+[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+[ComVisible(true)]
+[ComImport]
+public interface IRemoteEditorResult
+{
+    /// <summary>
+    /// Gets the error message of the result.
+    /// It may be <see langword="null"/> if there is no error.
+    /// </summary>
+    string? Error { get; }
+
+    /// <summary>
+    /// Gets the editor of the result.
+    /// It may be <see langword="null"/> if there is no editor.
+    /// </summary>
+    IRemoteEditor? Editor { get; }
+}
