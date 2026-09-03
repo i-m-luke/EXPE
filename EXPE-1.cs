@@ -43,23 +43,31 @@
         
         // Init remote editor
         var remoteEditorResult = this.GetRemoteEditor(this.editorFactory); 
-        if (remoteEditorResult.RemoteEditor is null)
+        if (remoteEditorResult.Editor is null)
         {
-            // Show error dialog with remoteEditorResult.Error;
-            this.WindowFrame.CloseFrame((uint)__FRAMECLOSE.FRAMECLOSE_PromptSave);
+            if (remoteEditorResult.Error is not null)
+            {
+                // Show error dialog with remoteEditorResult.Error;
+            }
+           
+            // TATO ŘÁDKA SE MOŽNÁ BUDE MUSET PŘESUNOUT DOLŮ POD InitWindowFrame a podmínit 'if remote EditorResult.Editor is null'
+            this.WindowFrame.CloseFrame((uint)__FRAMECLOSE.FRAMECLOSE_PromptSave); 
             return;
         }
-        
-        this.RemoteEditor = remoteEditorResult.RemoteEditor;
-        try
+        else
         {
-            this.RemoteEditor.Initialize(
-                new RemoteEditorVisitor(new WeakReference<IRemoteEditorVisitor>(this)),
+            this.RemoteEditor = remoteEditorResult.Editor;
+            try
+            {
+                this.RemoteEditor.Initialize(
+                    new RemoteEditorVisitor(new WeakReference<IRemoteEditorVisitor>(this)),
                 this.TextBufferManager.BufferText);
-        }
-        catch (Exception ex)
-        {
-            this.messageBoxService.ShowError(ex.Message, Resources.UnhandledException_Dialog_Title);
+            }
+            catch (Exception ex)
+            {
+                this.messageBoxService.ShowError(
+                    ex.Message, Resources.UnhandledException_Dialog_Title);
+                // ??? KDYŽ INICIALIZACE SELŽE TAK SE TIŠE POTLAČÍ?! TAKOVÝ EDITOR BY SE MĚL UZAVŘÍT!
         }
 
         this.InitWindowFrame();
