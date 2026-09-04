@@ -1,101 +1,60 @@
-﻿
-
-/// <inheritdoc />
-protected override void Initialize()
-{
-    SystemTest.Common.DevLogger.Instance.LogInfo($"{LogPrefix}: Initializing ...");
-
-    base.Initialize();
-    this.RegisterIndependentView(true);
-
-    ThreadHelper.ThrowIfNotOnUIThread();
-
-    this.ProjectActions = new ProjectActions(this.ProjectInfoProvider);
-
-    var mainAssemblyPath = Path.Combine(
-        this.ProjectInfoProvider.OutputDirPath,
-        this.ProjectInfoProvider.OutputFileName);
-    if (!File.Exists(mainAssemblyPath))
+﻿protected static async Task<DataAnalysisCreateResult<TDocumentViewModel>> CreateWithDataAnalysis<
+        TDocumentModel, TDocumentViewModel, TAnalyzer, TResolver, TAnalyzeResult>(
+        TDocumentModel possibleModel,
+        Func<TDocumentModel, TDocumentViewModel> viewModelFactory,
+        Func<TAnalyzer> analyzerFactory,
+        Func<TAnalyzeResult, TResolver> resolverFactory,
+        Action<TDocumentModel>? postHook = null,
+        Func<string,bool> onSevereConflicts = null,
+        Func<string,bool> onCriticalConflicts = null)
+        where TDocumentModel : class, new()
+        where TAnalyzer : IAnalyzer<TDocumentModel, TAnalyzeResult>
+        where TResolver : DataAnalysisResolverBase<TDocumentModel, TAnalyzeResult>
+        where TAnalyzeResult : AnalyzeResultBase
     {
-        var dte = this.GetDte();
-        if (dte is not null)
+        onSevereConflicts ??= logText => true; // true means terminate
+        onCriticalConflicts ??= logText => true;
+        
+        var analyzeResult = await AnalyzeAsync<TDocumentModel, TAnalyzer, TAnalyzeResult>(
+            possibleModel, analyzerFactory);
+        var logText = string.Join(Environment.NewLine, analyzeResult.ToLogLines()); 
+        
+        if (analyzeResult.HasCriticalConflicts)
         {
-            this.messageBoxService.ShowInfo(Resources.MainAssemblyNotFoundInfoMessage);
-            dte.Solution.SolutionBuild.BuildProject(
-                dte.Solution.SolutionBuild.ActiveConfiguration.Name,
-                this.ProjectInfoProvider.UniqueName,
-                WaitForBuildToFinish: true);
+           if (onCriticalConflicts(logText))
+           {
+               return;
+           }
         }
-    }
-
-    var editorsRemoting = this.GetRequiredService<IEditorsRemoting>();
-    if (!editorsRemoting.ColorsThemeInitialized)
-    {
-        this.GetColorsTheme().Visit(editorsRemoting.InitializeColorsTheme);
-    }
-
-    // Init test buffer manager
-    this.TextBufferManager = new TextBufferManager(
-        textBufferLines,
-        (IComponentModel)this.GetRequiredService<SComponentModel>());
-    this.TextBufferManager.UndoRedoHappened += this.OnUndoRedoHappened;
-    this.currentValidTextBufferSnapshot = this.TextBufferManager.GetCurrentSnapshot();
-    
-    // Init remote editor
-    var remoteEditorResult = this.GetRemoteEditor(this.editorFactory); 
-    if (remoteEditorResult.Editor is null)
-    {
-        if (remoteEditorResult.Error is not null)
+        
+        if (analyzeResult.HasSevereConflicts)
         {
-            // Show error dialog with remoteEditorResult.Error;
+            if (onSevereConflicts(logText))
+            {
+                return;
+            }
         }
-       
-        // TATO ŘÁDKA SE MOŽNÁ BUDE MUSET PŘESUNOUT DOLŮ POD InitWindowFrame a podmínit 'if remote EditorResult.Editor is null'
-        this.WindowFrame.CloseFrame((uint)__FRAMECLOSE.FRAMECLOSE_PromptSave); 
-        return;
-    }
-    else
-    {
-        this.RemoteEditor = remoteEditorResult.Editor;
-        try
-        {
-            this.RemoteEditor.Initialize(
-                new RemoteEditorVisitor(new WeakReference<IRemoteEditorVisitor>(this)),
-            this.TextBufferManager.BufferText);
-        }
-        catch (Exception ex)
-        {
-            this.messageBoxService.ShowError(
-                ex.Message, Resources.UnhandledException_Dialog_Title);
-            // ??? KDYŽ INICIALIZACE SELŽE TAK SE TIŠE POTLAČÍ?! TAKOVÝ EDITOR BY SE MĚL UZAVŘÍT!
+
+        var dataAnalysisResultResolver = resolverFactory(analyzeResult);
+        var resolvedModel = await dataAnalysisResultResolver.ResolveAsync(possibleModel)
+                            ?? new TDocumentModel();
+        return new DataAnalysisCreateResult<TDocumentViewModel>(
+            Create(resolvedModel, viewModelFactory, postHook),
+            conflictsFound);
     }
 
-    this.InitWindowFrame();
-    this.InitDteEvents();
+ 
+            // RemoteEditorVisitor bude mít metodu bool OnDataHasCriticalConflicts(string analyzeLogText)
+                MessageBoxService.ShowError(
+                    TextUtils.SafeFormat(Properties.Errors.LoadedDataHasCriticalConflicts, logText),
+                    Resources.DataAnalysis_Dialog_Title);
+                return new DataAnalysisCreateResult<TDocumentViewModel>(Maybe.None, conflictsFound);
+            }
 
-    SystemTest.Common.DevLogger.Instance.LogInfo($"{LogPrefix}: Initialized");
-}
-
-...
-
-/// <summary>
-/// Describes a remote editor result COM object.
-/// </summary>
-[Guid("a4554ae8-defa-403f-8d74-3ef0ca9afa85")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-[ComVisible(true)]
-[ComImport]
-public interface IRemoteEditorResult
-{
-    /// <summary>
-    /// Gets the error message of the result.
-    /// It may be <see langword="null"/> if there is no error.
-    /// </summary>
-    string? Error { get; }
-
-    /// <summary>
-    /// Gets the editor of the result.
-    /// It may be <see langword="null"/> if there is no editor.
-    /// </summary>
-    IRemoteEditor? Editor { get; }
-}
+            // RemoteEditorVisitor bude mít metodu bool OnDataHasSevereConflicts(string analyzeLogText)
+            if (!MessageBoxService.ShowQuestion(
+                    TextUtils.SafeFormat(Properties.Errors.LoadedDataHasSevereConflicts, logText),
+                    Resources.DataAnalysis_Dialog_Title))
+            {
+                return new DataAnalysisCreateResult<TDocumentViewModel>(Maybe.None, conflictsFound);
+            }
