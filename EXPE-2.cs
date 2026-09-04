@@ -44,11 +44,22 @@ public class TestUserConfig(
 
 ...
 
-public class UserConfigEditorService(Lazy<object> configInstanceLazy) : IUserConfigEditorService
+public class EditorServiceBase(
+    Lazy<object> configInstanceLazy,
+    ConcurrentDictionary<Type, object> driverConfigInstanceLaziesMap) : IEditorService
 {
     public object GetConfigObject()
         => configInstanceLazy.Value;
         
     public object[] GetDriverConfigs()
-        => [];
+        => [..driverConfigLaziesMap.Select(x => x.Value.Value)];
+            
+    public object? GetDriverConfig(Type type)
+        => driverConfigInstanceLaziesMap.TryGetItem(type, out var configInstanceLazy) 
+            ? configInstanceLazy.Value
+            : null
 }
+                                
+public class UserConfigEditorService(
+    Lazy<object> configInstanceLazy)
+    : EditorServiceBase(configInstanceLazy), IUserConfigEditorService;
