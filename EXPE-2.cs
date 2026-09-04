@@ -38,7 +38,8 @@ public class TestUserConfig(
             
             // TODO: Extend ioc with EditorsServices
             
-            var configObject = new TestConfigObject(this.Model.ConfigObject, ioc));
+            var configObject = new TestConfigObject(
+                this.Model.ConfigObject, configObjectInstanceLazy, ioc));
             
             return configObject;
         }
