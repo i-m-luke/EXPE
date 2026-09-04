@@ -29,7 +29,9 @@ public class TestUserConfig(
         {
             var valueDeserializer = new ValueDeserializer(...); // TODO: Create deserialized (+ extend the Ioc with it?)
             var configObjectInstanceLazy = new Lazy(() => valueDeserializer.Deserialize(this.Model.ConfigObject));
-            var userConfigEditorService = new UserConfigEditorService(configObjectInstanceLazy); // TODO: exctend with driver configs instances
+            var userConfigEditorService = new UserConfigEditorService(
+                configObjectInstanceLazy,
+                []); // TODO: exctend with driver configs instances 
             var editorsServices = new EditorsServices
                 userConfigEditorServices: userConfigEditorService,
                 packageManifestEditorServices: null);
