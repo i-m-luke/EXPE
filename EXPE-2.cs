@@ -27,15 +27,16 @@ public class TestUserConfig(
     public TestConfigObject ConfigObject
         => this.GetOrInitialize(ref field, () => 
         {
-            var userConfigEditorService = new UserConfigEditorService();
+            var valueDeserializer = new ValueDeserializer(...); // TODO: Create deserialized (+ extend the Ioc with it?)
+            var configObjectInstanceLazy = new Lazy(() => valueDeserializer.Deserialize(this.Model.ConfigObject));
+            var userConfigEditorService = new UserConfigEditorService(configObjectInstanceLazy); // TODO: exctend with driver configs instances
             var editorsServices = new EditorsServices
                 userConfigEditorServices: userConfigEditorService,
                 packageManifestEditorServices: null);
-                
-            // TODO: Extend ioc with EditorsServices
-            var configObject = new TestConfigObject(this.Model.ConfigObject, ioc));
             
-            // TODO: Instantiate the configObject and provided it to the userConfigEditorService
+            // TODO: Extend ioc with EditorsServices
+            
+            var configObject = new TestConfigObject(this.Model.ConfigObject, ioc));
             
             return configObject;
         }
