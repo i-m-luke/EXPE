@@ -5,15 +5,15 @@
         Func<TAnalyzer> analyzerFactory,
         Func<TAnalyzeResult, TResolver> resolverFactory,
         Action<TDocumentModel>? postHook = null,
-        Func<string,bool> onSevereConflicts = null,
-        Func<string,bool> onCriticalConflicts = null)
+        Func<string,string> onSevereConflictsMessage = null,
+        Func<string,string> onCriticalConflictsMessage = null)
         where TDocumentModel : class, new()
         where TAnalyzer : IAnalyzer<TDocumentModel, TAnalyzeResult>
         where TResolver : DataAnalysisResolverBase<TDocumentModel, TAnalyzeResult>
         where TAnalyzeResult : AnalyzeResultBase
     {
-        onSevereConflicts ??= logText => true; // true means terminate
-        onCriticalConflicts ??= logText => true;
+        onSevereConflicts ??= logText => TextUtils.SafeFormat(Properties.Errors.LoadedDataHasCriticalConflicts, logText); // TODO: Change resources text 
+        onCriticalConflicts ??= logText => TextUtils.SafeFormat(Properties.Errors.LoadedDataHasSevereConflicts, logText);
         
         var analyzeResult = await AnalyzeAsync<TDocumentModel, TAnalyzer, TAnalyzeResult>(
             possibleModel, analyzerFactory);
@@ -21,17 +21,19 @@
         
         if (analyzeResult.HasCriticalConflicts)
         {
-           if (onCriticalConflicts(logText))
-           {
-               return;
-           }
+           var message = onCriticalConflictsMessage(logText); 
+           MessageBoxService.ShowError(
+               message, Resources.DataAnalysis_Dialog_Title);
+            return new DataAnalysisCreateResult<TDocumentViewModel>(Maybe.None, false);
         }
         
         if (analyzeResult.HasSevereConflicts)
         {
-            if (onSevereConflicts(logText))
+            var message = onSevereConflictsMessage(logText);
+            if (!MessageBoxService.ShowQuestion(
+                    message, Resources.DataAnalysis_Dialog_Title))
             {
-                return;
+                return new DataAnalysisCreateResult<TDocumentViewModel>(Maybe.None, false);
             }
         }
 
@@ -40,21 +42,13 @@
                             ?? new TDocumentModel();
         return new DataAnalysisCreateResult<TDocumentViewModel>(
             Create(resolvedModel, viewModelFactory, postHook),
-            conflictsFound);
+            analyzeResult.HasConflicts); // If had conflicts then the model was changed at this point
     }
 
  
             // RemoteEditorVisitor bude mít metodu bool OnDataHasCriticalConflicts(string analyzeLogText)
-                MessageBoxService.ShowError(
-                    TextUtils.SafeFormat(Properties.Errors.LoadedDataHasCriticalConflicts, logText),
-                    Resources.DataAnalysis_Dialog_Title);
-                return new DataAnalysisCreateResult<TDocumentViewModel>(Maybe.None, conflictsFound);
+                
             }
 
             // RemoteEditorVisitor bude mít metodu bool OnDataHasSevereConflicts(string analyzeLogText)
-            if (!MessageBoxService.ShowQuestion(
-                    TextUtils.SafeFormat(Properties.Errors.LoadedDataHasSevereConflicts, logText),
-                    Resources.DataAnalysis_Dialog_Title))
-            {
-                return new DataAnalysisCreateResult<TDocumentViewModel>(Maybe.None, conflictsFound);
-            }
+            
